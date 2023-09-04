@@ -2,13 +2,16 @@
 import JSON5 from 'json5';
 import { useStorage } from '@vueuse/core';
 import { formatJson } from './json.models';
+import { useJsonSchemaValidation } from './useJsonSchemaValidation';
 import { withDefaultOnError } from '@/utils/defaults';
 import { useValidation } from '@/composable/validation';
 import TextareaCopyable from '@/components/TextareaCopyable.vue';
 
 const inputElement = ref<HTMLElement>();
+const jsonSchemaInputElement = ref<HTMLElement>();
 
 const rawJson = useStorage('json-prettify:raw-json', '{"hello": "world", "foo": "bar"}');
+const schemaData = useStorage('json-prettify:schema-data', '');
 const indentSize = useStorage('json-prettify:indent-size', 3);
 const sortKeys = useStorage('json-prettify:sort-keys', true);
 const cleanJson = computed(() => withDefaultOnError(() => formatJson({ rawJson, indentSize, sortKeys }), ''));
@@ -22,6 +25,9 @@ const rawJsonValidation = useValidation({
     },
   ],
 });
+
+const schemaUrl = ref();
+const { schemas, errors } = useJsonSchemaValidation({ json: rawJson, schemaUrl, schemaData });
 </script>
 
 <template>
@@ -33,8 +39,44 @@ const rawJsonValidation = useValidation({
       <n-form-item label="Indent size :" label-placement="left" label-width="100" :show-feedback="false">
         <n-input-number v-model:value="indentSize" min="0" max="10" style="width: 100px" />
       </n-form-item>
+      <c-select
+        v-model:value="schemaUrl"
+        label="JSON Schema"
+        label-position="left"
+        label-width="130px"
+        label-align="right"
+        :options="[
+          { label: 'No validation', value: null },
+          { label: 'Custom', value: 'custom' },
+          ...schemas.filter(schema => schema.fileMatch?.length > 0).map(s => ({ label: s.name, value: s.url })),
+        ]"
+        searchable mb-4
+      />
     </div>
   </div>
+
+  <template v-if="errors.length > 0">
+    <ul
+      v-for="error in errors"
+      :key="error"
+    >
+      <li>{{ error }}</li>
+    </ul>
+  </template>
+
+  <c-input-text
+    v-if="schemaUrl === 'custom'"
+    ref="jsonSchemaInputElement"
+    v-model:value="schemaData"
+    placeholder="Paste your JSON Schema here..."
+    rows="20"
+    multiline
+    autocomplete="off"
+    autocorrect="off"
+    autocapitalize="off"
+    spellcheck="false"
+    monospace
+  />
 
   <n-form-item
     label="Your raw JSON"
